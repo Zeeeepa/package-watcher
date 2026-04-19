@@ -28,3 +28,4 @@ frontend/.vite/
 .idea/
 .DS_Store
 *.swp
+frontend/tsconfig.tsbuildinfo
