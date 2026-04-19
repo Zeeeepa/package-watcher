@@ -1,0 +1,44 @@
+[project]
+name = "package-watcher-backend"
+version = "1.0.0"
+description = "FastAPI backend for package-watcher (package registry aggregator / explorer)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "pydantic>=2.5",
+  "feedparser>=6.0",
+  "trafilatura>=1.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5",
+  "mypy>=1.8",
+  "pytest>=8.0",
+  "httpx>=0.27",
+]
+
+[project.scripts]
+package-watcher = "app.main:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "W"]
+ignore = ["E501", "B008", "B904"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+check_untyped_defs = true
