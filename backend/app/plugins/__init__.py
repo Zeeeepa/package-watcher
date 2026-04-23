@@ -27,3 +27,7 @@ def get_plugin(pid: str) -> Plugin | None:
         if p.id == pid:
             return p
     return None
+
+
+def iter_plugins() -> list[Plugin]:
+    return list(_REGISTRY)

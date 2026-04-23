@@ -97,6 +97,19 @@ def init() -> None:
             CREATE INDEX IF NOT EXISTS idx_analysis_pkg ON analysis_cache(package_id);
             """
         )
+        _migrate(c)
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    """Idempotent column-add migrations for upgrades from older DBs."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(packages)")}
+    if "raw_json" not in cols:
+        c.execute("ALTER TABLE packages ADD COLUMN raw_json TEXT")
+    meta_cols = {r["name"] for r in c.execute("PRAGMA table_info(package_metadata)")}
+    if "all_analyses_json" not in meta_cols:
+        c.execute("ALTER TABLE package_metadata ADD COLUMN all_analyses_json TEXT")
+    if "last_full_indexed_at" not in meta_cols:
+        c.execute("ALTER TABLE package_metadata ADD COLUMN last_full_indexed_at TEXT")
 
 
 # ── Monitors ───────────────────────────────────────────────────────────────────
@@ -219,11 +232,12 @@ def save_packages(
                 ).fetchone()
                 if lib_existing:
                     continue
+            raw_json = json.dumps(p, default=str)
             cur = c.execute(
                 "INSERT OR IGNORE INTO packages "
                 "(provider, monitor_id, query, name, description, url, author, version,"
-                " published_at, size_bytes, file_count, language, fetched_at, sources_json)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " published_at, size_bytes, file_count, language, fetched_at, sources_json, raw_json)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     provider,
                     monitor_id,
@@ -239,6 +253,7 @@ def save_packages(
                     p.get("language", ""),
                     now,
                     json.dumps([f"LIB+{lib_source}"]) if lib_source else None,
+                    raw_json,
                 ),
             )
             if cur.rowcount:
@@ -426,7 +441,31 @@ def get_packages(
 def get_package(pkg_id: int) -> dict | None:
     with connect() as c:
         r = c.execute("SELECT * FROM packages WHERE id=?", (pkg_id,)).fetchone()
-        return dict(r) if r else None
+        if not r:
+            return None
+        d = dict(r)
+        for key in ("raw_json", "sources_json"):
+            if d.get(key) and isinstance(d[key], str):
+                try:
+                    d[key] = json.loads(d[key])
+                except Exception:
+                    pass
+        return d
+
+
+def get_package_full(pkg_id: int) -> dict | None:
+    """Package + metadata + all cached analyses in one blob."""
+    pkg = get_package(pkg_id)
+    if not pkg:
+        return None
+    meta = get_pkg_metadata(pkg_id) or {}
+    with connect() as c:
+        rows = c.execute(
+            "SELECT plugin, result, created_at FROM analysis_cache WHERE package_id=?",
+            (pkg_id,),
+        ).fetchall()
+    analyses = {r["plugin"]: {"result": r["result"], "created_at": r["created_at"]} for r in rows}
+    return {"package": pkg, "metadata": meta, "analyses": analyses}
 
 
 def delete_packages(ids: list[int]) -> int:
@@ -538,6 +577,55 @@ def timeline_published(days: int = 90) -> list[dict]:
             (f"-{days} days",),
         ).fetchall()
     return [{"date": r["d"], "count": int(r["n"])} for r in rows if r["d"]]
+
+
+def top_starred(limit: int = 20) -> list[dict]:
+    with connect() as c:
+        rows = c.execute(
+            "SELECT p.id, p.provider, p.name, p.language, p.version,"
+            " COALESCE(m.stars, 0) AS stars, COALESCE(m.compliance_score, 0) AS score"
+            " FROM packages p LEFT JOIN package_metadata m ON m.package_id = p.id"
+            " ORDER BY stars DESC, score DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def top_compliance(limit: int = 20) -> list[dict]:
+    with connect() as c:
+        rows = c.execute(
+            "SELECT p.id, p.provider, p.name, p.language, p.version,"
+            " COALESCE(m.stars, 0) AS stars, COALESCE(m.compliance_score, 0) AS score"
+            " FROM packages p INNER JOIN package_metadata m ON m.package_id = p.id"
+            " WHERE m.compliance_score > 0"
+            " ORDER BY score DESC, stars DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def catalog_rows(limit: int = 500, offset: int = 0, search: str = "") -> list[dict]:
+    conds = []
+    params: list[Any] = []
+    if search:
+        conds.append("(LOWER(p.name) LIKE ? OR LOWER(p.description) LIKE ?)")
+        s = f"%{search.lower()}%"
+        params += [s, s]
+    where = ("WHERE " + " AND ".join(conds)) if conds else ""
+    sql = (
+        "SELECT p.id, p.provider, p.name, p.description, p.version, p.language,"
+        " p.published_at, p.fetched_at, p.size_bytes, p.file_count, p.url,"
+        " p.download_status,"
+        " COALESCE(m.stars, 0) AS stars, COALESCE(m.forks, 0) AS forks,"
+        " COALESCE(m.compliance_score, 0) AS compliance_score,"
+        " m.license_spdx, m.homepage, m.last_full_indexed_at"
+        " FROM packages p LEFT JOIN package_metadata m ON m.package_id = p.id"
+        f" {where} ORDER BY p.fetched_at DESC LIMIT ? OFFSET ?"
+    )
+    params += [limit, offset]
+    with connect() as c:
+        rows = c.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
 
 
 def top_languages(limit: int = 20) -> list[dict]:

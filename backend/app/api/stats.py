@@ -41,6 +41,26 @@ def languages(limit: int = 20) -> list[dict]:
     return db.top_languages(limit=max(1, min(limit, 100)))
 
 
+@router.get("/top_starred")
+def top_starred(limit: int = 20) -> list[dict]:
+    return db.top_starred(limit=max(1, min(limit, 100)))
+
+
+@router.get("/top_compliance")
+def top_compliance(limit: int = 20) -> list[dict]:
+    return db.top_compliance(limit=max(1, min(limit, 100)))
+
+
+@router.get("/catalog")
+def catalog(limit: int = 500, offset: int = 0, search: str = "") -> dict:
+    rows = db.catalog_rows(
+        limit=max(1, min(limit, 2000)),
+        offset=max(0, offset),
+        search=search,
+    )
+    return {"items": rows, "offset": offset, "limit": limit}
+
+
 @router.get("/meta")
 def meta() -> dict:
     return {

@@ -46,6 +46,41 @@ export interface PackageDetail {
   metadata: Record<string, any>;
 }
 
+export interface PackageFull extends PackageDetail {
+  analyses: Record<string, { result: string; created_at: string }>;
+}
+
+export interface CatalogRow {
+  id: number;
+  provider: string;
+  name: string;
+  description: string | null;
+  version: string | null;
+  language: string | null;
+  published_at: string | null;
+  fetched_at: string | null;
+  size_bytes: number | null;
+  file_count: number | null;
+  url: string | null;
+  download_status: string | null;
+  stars: number;
+  forks: number;
+  compliance_score: number;
+  license_spdx: string | null;
+  homepage: string | null;
+  last_full_indexed_at: string | null;
+}
+
+export interface TopRow {
+  id: number;
+  provider: string;
+  name: string;
+  language: string | null;
+  version: string | null;
+  stars: number;
+  score: number;
+}
+
 export interface DashboardStats {
   total: number;
   by_provider: Record<string, number>;

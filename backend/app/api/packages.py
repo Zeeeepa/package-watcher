@@ -74,6 +74,14 @@ def package_detail(pkg_id: int) -> dict:
     return {"package": pkg, "metadata": meta}
 
 
+@router.get("/{pkg_id}/full")
+def package_full(pkg_id: int) -> dict:
+    full = db.get_package_full(pkg_id)
+    if not full:
+        raise HTTPException(404, "Not found")
+    return full
+
+
 @router.get("/{pkg_id}/live")
 def package_live(pkg_id: int) -> dict:
     pkg = db.get_package(pkg_id)

@@ -7,7 +7,7 @@ import threading
 from collections.abc import Callable
 from datetime import datetime
 
-from . import db
+from . import db, plugins
 from .indexers import index_for
 from .indexers.compliance import check_compliance, save_compliance
 
@@ -128,6 +128,10 @@ def index_one(pkg_id: int, provider: str, name: str, force: bool = False, log: b
 
     db.set_pkg_metadata(pkg_id, **fields)
 
+    # Auto-run all cacheable analysis plugins so the full state lives in DB.
+    _run_all_plugins(pkg_id)
+    db.set_pkg_metadata(pkg_id, last_full_indexed_at=datetime.now().isoformat(timespec="seconds"))
+
     comp = check_compliance(pkg_id)
     save_compliance(pkg_id, comp)
     if log:
@@ -135,6 +139,25 @@ def index_one(pkg_id: int, provider: str, name: str, force: bool = False, log: b
         icon = "✅" if score == 100 else ("🟡" if score >= 60 else "🔴")
         _log(f"{icon} [{provider}·{name[:30]}]  {score}/100")
     return comp
+
+
+def _run_all_plugins(pkg_id: int) -> None:
+    pkg = db.get_package(pkg_id)
+    meta = db.get_pkg_metadata(pkg_id) or {}
+    if not pkg:
+        return
+    for plugin in plugins.iter_plugins():
+        if not plugin.cache:
+            continue
+        try:
+            existing = db.get_analysis(pkg_id, plugin.id)
+            if existing:
+                continue
+            out = plugin.run(pkg, meta)
+            if out:
+                db.set_analysis(pkg_id, plugin.id, out)
+        except Exception as e:
+            _log(f"[plugin {plugin.id}] {pkg.get('provider')}/{pkg.get('name')}: {e!s:.80}")
 
 
 def _get_q() -> queue.Queue:

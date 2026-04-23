@@ -363,3 +363,187 @@ input:focus, select:focus, textarea:focus {
 .num-input {
   width: 80px;
 }
+
+/* ── View tabs ─────────────────────────────────────────────────────────────── */
+.view-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.view-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+.view-tab.active {
+  background: var(--panel-hi);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* ── Catalog ──────────────────────────────────────────────────────────────── */
+.catalog-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.catalog-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.catalog-toolbar input {
+  flex: 0 0 260px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.catalog-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.catalog-table th,
+.catalog-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.catalog-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 500;
+  z-index: 1;
+}
+.catalog-table tbody tr:hover {
+  background: var(--panel-hi);
+}
+
+/* ── Analyzer ─────────────────────────────────────────────────────────────── */
+.analyzer-view {
+  padding: 14px;
+  overflow: auto;
+  height: 100%;
+}
+.analyzer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.stat-label {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 600;
+}
+.analyzer-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.top-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.top-panel h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+.top-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.top-row:hover {
+  background: var(--panel-hi);
+}
+.top-rank {
+  flex: 0 0 46px;
+  color: var(--accent);
+  font-weight: 600;
+  text-align: right;
+}
+.top-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.by-provider {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.by-provider h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.provider-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 140px 80px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.provider-bar {
+  height: 6px;
+  background: var(--accent);
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
+/* ── Detail panel additions ───────────────────────────────────────────────── */
+.tab.has-data {
+  color: var(--text);
+}

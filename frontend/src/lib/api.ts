@@ -1,14 +1,17 @@
 import type {
+  CatalogRow,
   DashboardStats,
   HistogramBucket,
   LanguageCount,
   MetaResponse,
   Monitor,
   PackageDetail,
+  PackageFull,
   PackagesResponse,
   Filters,
   PluginDef,
   TimelinePoint,
+  TopRow,
 } from "../types";
 
 const BASE = "/api";
@@ -85,6 +88,7 @@ export const api = {
     return j<PackagesResponse>(`${BASE}/packages?${qs.toString()}`);
   },
   package: (id: number) => j<PackageDetail>(`${BASE}/packages/${id}`),
+  packageFull: (id: number) => j<PackageFull>(`${BASE}/packages/${id}/full`),
   packageLive: (id: number) =>
     j<{ package: any; live: any }>(`${BASE}/packages/${id}/live`),
   downloadPackage: (id: number) =>
@@ -111,4 +115,18 @@ export const api = {
     j<{ type: string; feed_url: string; sample: string[]; count: number }>(
       `${BASE}/feeds/detect?url=${encodeURIComponent(url)}`
     ),
+
+  topStarred: (limit = 20) =>
+    j<TopRow[]>(`${BASE}/stats/top_starred?limit=${limit}`),
+  topCompliance: (limit = 20) =>
+    j<TopRow[]>(`${BASE}/stats/top_compliance?limit=${limit}`),
+  catalog: (limit = 500, offset = 0, search = "") => {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(limit));
+    qs.set("offset", String(offset));
+    if (search) qs.set("search", search);
+    return j<{ items: CatalogRow[]; offset: number; limit: number }>(
+      `${BASE}/stats/catalog?${qs.toString()}`
+    );
+  },
 };

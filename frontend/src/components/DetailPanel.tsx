@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { fmtBytes, fmtNum, relTime } from "../lib/format";
-import type { PackageDetail, PackageRow, PluginDef } from "../types";
+import type { PackageFull, PackageRow, PluginDef } from "../types";
 
 interface Props {
   pkg: PackageRow | null;
+  pkgId?: number | null;
   onReload: () => void;
 }
 
-export function DetailPanel({ pkg, onReload }: Props) {
-  const [detail, setDetail] = useState<PackageDetail | null>(null);
+export function DetailPanel({ pkg, pkgId, onReload }: Props) {
+  const activeId = pkg?.id ?? pkgId ?? null;
+  const [full, setFull] = useState<PackageFull | null>(null);
   const [plugins, setPlugins] = useState<PluginDef[]>([]);
   const [tab, setTab] = useState<string>("overview");
-  const [tabCache, setTabCache] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -22,39 +23,47 @@ export function DetailPanel({ pkg, onReload }: Props) {
 
   useEffect(() => {
     setMsg("");
-    setTabCache({});
     setTab("overview");
-    if (!pkg) {
-      setDetail(null);
+    if (activeId == null) {
+      setFull(null);
       return;
     }
     setLoading(true);
     api
-      .package(pkg.id)
-      .then(setDetail)
+      .packageFull(activeId)
+      .then(setFull)
+      .catch(() => setFull(null))
       .finally(() => setLoading(false));
-  }, [pkg?.id]);
+  }, [activeId]);
 
-  useEffect(() => {
-    if (!pkg || tab === "overview") return;
-    if (tabCache[tab]) return;
-    setMsg("");
-    api
-      .runPlugin(pkg.id, tab, false)
-      .then((r) => setTabCache((c) => ({ ...c, [tab]: r.result })))
-      .catch((e) => setMsg(String(e)));
-  }, [tab, pkg?.id]);
+  const refreshFull = () => {
+    if (activeId == null) return;
+    api.packageFull(activeId).then(setFull).catch(() => {});
+  };
 
-  if (!pkg) {
+  if (activeId == null) {
     return (
       <div className="empty">
         Select a package to see deep metadata, README, dependencies, file tree,
-        analysis.
+        analysis — all stored in the DB.
       </div>
     );
   }
 
-  const p = detail?.package || pkg;
+  const p = full?.package || pkg || {};
+  const analyses = full?.analyses || {};
+
+  const onRunPlugin = async (pluginId: string) => {
+    if (activeId == null) return;
+    setMsg(`Running ${pluginId}…`);
+    try {
+      await api.runPlugin(activeId, pluginId, true);
+      refreshFull();
+      setMsg("");
+    } catch (e) {
+      setMsg(String(e));
+    }
+  };
 
   return (
     <div>
@@ -87,14 +96,17 @@ export function DetailPanel({ pkg, onReload }: Props) {
         <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
           <button
             onClick={() => {
+              if (activeId == null) return;
               setLoading(true);
+              setMsg("Re-indexing (running all plugins)…");
               api
-                .reindex(pkg.id)
+                .reindex(activeId)
                 .then(() => {
                   onReload();
-                  api.package(pkg.id).then(setDetail);
-                  setTabCache({});
+                  refreshFull();
+                  setMsg("Re-indexed.");
                 })
+                .catch((e) => setMsg(String(e)))
                 .finally(() => setLoading(false));
             }}
           >
@@ -102,9 +114,10 @@ export function DetailPanel({ pkg, onReload }: Props) {
           </button>
           <button
             onClick={() => {
+              if (activeId == null) return;
               setMsg("Downloading…");
               api
-                .downloadPackage(pkg.id)
+                .downloadPackage(activeId)
                 .then((r) => setMsg(r.message))
                 .catch((e) => setMsg(String(e)))
                 .finally(onReload);
@@ -125,35 +138,48 @@ export function DetailPanel({ pkg, onReload }: Props) {
         >
           Overview
         </div>
+        <div
+          className={"tab" + (tab === "raw" ? " active" : "")}
+          onClick={() => setTab("raw")}
+        >
+          Raw
+        </div>
         {plugins.map((pl) => (
           <div
             key={pl.id}
-            className={"tab" + (tab === pl.id ? " active" : "")}
+            className={
+              "tab" +
+              (tab === pl.id ? " active" : "") +
+              (analyses[pl.id] ? " has-data" : "")
+            }
             onClick={() => setTab(pl.id)}
+            title={analyses[pl.id] ? "Cached in DB" : "Not yet indexed"}
           >
             {pl.label}
+            {analyses[pl.id] ? " ●" : ""}
           </div>
         ))}
       </div>
 
       <div className="detail-tab-content">
-        {tab === "overview" &&
-          (loading ? (
-            <em>Loading…</em>
-          ) : (
-            <Overview detail={detail} />
-          ))}
-        {tab !== "overview" && !tabCache[tab] && <em>Computing…</em>}
-        {tab !== "overview" && tabCache[tab] && tabCache[tab]}
+        {tab === "overview" && (loading ? <em>Loading…</em> : <Overview full={full} />)}
+        {tab === "raw" && <RawView full={full} />}
+        {tab !== "overview" && tab !== "raw" && (
+          <PluginPane
+            pluginId={tab}
+            analyses={analyses}
+            onRun={() => onRunPlugin(tab)}
+          />
+        )}
       </div>
     </div>
   );
 }
 
-function Overview({ detail }: { detail: PackageDetail | null }) {
-  if (!detail) return <em>Loading…</em>;
-  const m = detail.metadata || {};
-  const p = detail.package || {};
+function Overview({ full }: { full: PackageFull | null }) {
+  if (!full) return <em>Loading…</em>;
+  const m = full.metadata || {};
+  const p = full.package || {};
   const rows: [string, string | number | null][] = [
     ["Description", p.description],
     ["License", m.license_spdx || ""],
@@ -162,7 +188,7 @@ function Overview({ detail }: { detail: PackageDetail | null }) {
     ["Forks", m.forks || null],
     ["Open issues", m.open_issues || null],
     ["Compliance", m.compliance_score ? `${m.compliance_score}/100` : null],
-    ["Indexed", m.indexed_at ? relTime(m.indexed_at as string) : null],
+    ["Last indexed", m.last_full_indexed_at ? relTime(m.last_full_indexed_at as string) : null],
   ];
   return (
     <>
@@ -192,5 +218,58 @@ function Overview({ detail }: { detail: PackageDetail | null }) {
         </div>
       )}
     </>
+  );
+}
+
+function RawView({ full }: { full: PackageFull | null }) {
+  if (!full) return <em>Loading…</em>;
+  const raw = full.package?.raw_json;
+  if (!raw) return <em>No raw payload stored.</em>;
+  return (
+    <pre
+      style={{
+        fontSize: 11,
+        background: "var(--bg)",
+        padding: 8,
+        borderRadius: 4,
+        maxHeight: 520,
+        overflow: "auto",
+      }}
+    >
+      {JSON.stringify(raw, null, 2)}
+    </pre>
+  );
+}
+
+function PluginPane({
+  pluginId,
+  analyses,
+  onRun,
+}: {
+  pluginId: string;
+  analyses: Record<string, { result: string; created_at: string }>;
+  onRun: () => void;
+}) {
+  const entry = analyses[pluginId];
+  if (!entry) {
+    return (
+      <div>
+        <em>No cached result in DB.</em>{" "}
+        <button onClick={onRun}>Run plugin</button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 6 }}>
+        Cached {relTime(entry.created_at)} ·{" "}
+        <button onClick={onRun} style={{ fontSize: 10 }}>
+          Re-run
+        </button>
+      </div>
+      <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0 }}>
+        {entry.result}
+      </pre>
+    </div>
   );
 }
